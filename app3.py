@@ -140,20 +140,86 @@ class AIAViewer(QWidget):
 
 
         # Layouts
+        # btn_layout = QHBoxLayout()
+        # for b in [self.load_button, self.display_button, self.upgrade_button,
+        #           self.run_diff_button, self.prev_button, self.next_button, self.save_button]:
+        #     btn_layout.addWidget(b)
+
+        # self.figure = Figure()
+        # self.canvas = FigureCanvas(self.figure)
+        # self.label = QLabel('Ready.')
+
+        # layout = QVBoxLayout()
+        # layout.addLayout(btn_layout)
+        # layout.addWidget(self.canvas)
+        # layout.addWidget(self.label)
+        # self.setLayout(layout)
+
+        # === MAIN LAYOUTS =======================================================
+        self.label = QLabel('')
+        main_layout = QHBoxLayout()        # Whole window: left side big figure, right side controls
+        left_layout = QVBoxLayout()        # Buttons on top + figure canvas + bottom sliders
+        right_layout = QVBoxLayout()       # All side controls go here
+
+        # --- top buttons row ----------------------------------------------------
         btn_layout = QHBoxLayout()
         for b in [self.load_button, self.display_button, self.upgrade_button,
-                  self.run_diff_button, self.prev_button, self.next_button, self.save_button]:
+                self.run_diff_button, self.prev_button, self.next_button, self.save_button]:
             btn_layout.addWidget(b)
 
+        left_layout.addLayout(btn_layout)
+
+        # --- big canvas in the center ------------------------------------------
         self.figure = Figure()
         self.canvas = FigureCanvas(self.figure)
-        self.label = QLabel('Ready.')
+        left_layout.addWidget(self.canvas, stretch=1)
 
-        layout = QVBoxLayout()
-        layout.addLayout(btn_layout)
-        layout.addWidget(self.canvas)
-        layout.addWidget(self.label)
-        self.setLayout(layout)
+        # --- bottom sliders ------------------------------------------------------
+        # sliders_layout = QVBoxLayout()
+        # sliders_layout.addWidget(QLabel('Semi-Major Axis:'))
+        # sliders_layout.addWidget(self.a_slider)
+        # sliders_layout.addWidget(QLabel('Semi-Minor Axis:'))
+        # sliders_layout.addWidget(self.b_slider)
+        # left_layout.addLayout(sliders_layout)
+
+        # === RIGHT PANEL ========================================================
+        # # Ellipse center
+        # ellipse_box = QVBoxLayout()
+        # ellipse_box.addWidget(QLabel('Ellipse Center:'))
+        # ellipse_box.addWidget(self.x_input)
+        # ellipse_box.addWidget(self.y_input)
+        # ellipse_box.addWidget(self.ellipse_button)
+        # ellipse_box.addWidget(self.fit_button)
+        # right_layout.addLayout(ellipse_box)
+
+        # # GONG / PFSS
+        # gong_box = QVBoxLayout()
+        # gong_box.addWidget(QLabel('GONG Data for PFSS:'))
+        # gong_box.addWidget(self.select_gong_button)
+        # gong_box.addWidget(self.gong_file_input)
+        # gong_box.addWidget(self.pfss_button)
+        # right_layout.addLayout(gong_box)
+
+        # # 3D options
+        # threed_box = QVBoxLayout()
+        # threed_box.addWidget(self.show_3d_button)
+        # threed_box.addWidget(self.show_shell_checkbox)
+        # threed_box.addWidget(self.show_normals_checkbox)
+        # threed_box.addWidget(self.show_radials_checkbox)
+        # threed_box.addWidget(QLabel('Radial Lines Vertical:'))
+        # threed_box.addWidget(self.n_lat_radial_slider)
+        # threed_box.addWidget(QLabel('Radial Lines Horizontal:'))
+        # threed_box.addWidget(self.n_lon_radial_slider)
+        # threed_box.addWidget(self.show_field_lines_checkbox)
+        # right_layout.addLayout(threed_box)
+
+        # # Status label at bottom of right panel
+        # right_layout.addWidget(self.label)
+
+        # Final assembly
+        main_layout.addLayout(left_layout, stretch=3)
+        main_layout.addLayout(right_layout, stretch=1)
+        self.setLayout(main_layout)
 
         ellipse_layout = QVBoxLayout()
         ellipse_layout.addWidget(QLabel('Ellipse Center:'))
@@ -166,7 +232,8 @@ class AIAViewer(QWidget):
         ellipse_layout.addWidget(self.b_slider)
         ellipse_layout.addWidget(self.ellipse_button)
         ellipse_layout.addWidget(self.fit_button)
-        layout.addLayout(ellipse_layout)
+        # layout.addLayout(ellipse_layout)
+        right_layout.addLayout(ellipse_layout)
 
         # Add GONG/PFSS controls
         gong_pfss_layout = QVBoxLayout()
@@ -174,7 +241,8 @@ class AIAViewer(QWidget):
         gong_pfss_layout.addWidget(self.select_gong_button)
         gong_pfss_layout.addWidget(self.gong_file_input)
         gong_pfss_layout.addWidget(self.pfss_button)
-        layout.addLayout(gong_pfss_layout)
+        # layout.addLayout(gong_pfss_layout)
+        right_layout.addLayout(gong_pfss_layout)
 
         # Add 3D ellipsoid controls to the layout
         _3d_layout = QVBoxLayout()
@@ -187,7 +255,9 @@ class AIAViewer(QWidget):
         _3d_layout.addWidget(QLabel('Radial Lines Horizontal:'))
         _3d_layout.addWidget(self.n_lon_radial_slider)
         _3d_layout.addWidget(self.show_field_lines_checkbox)
-        layout.addLayout(_3d_layout)
+        # layout.addLayout(_3d_layout)
+        right_layout.addLayout(_3d_layout)
+    
     
     def select_gong_file(self):
         """Opens a file dialog to select the GONG FITS file."""
