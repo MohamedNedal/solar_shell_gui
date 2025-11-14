@@ -2,6 +2,9 @@
 __pycache__/
 *.py[codz]
 *$py.class
+*.py[cod]
+*.pyo
+*.pyd
 
 # C extensions
 *.so
@@ -77,6 +80,8 @@ target/
 
 # Jupyter Notebook
 .ipynb_checkpoints
+*.ipynb~
+*.nbconvert.ipynb
 
 # IPython
 profile_default/
@@ -200,6 +205,16 @@ cython_debug/
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
 .cursorindexingignore
+
+# editor / macOS cruft
+.DS_Store
+*.swp
+*.swo
+*~
+
+# general temp
+*.tmp
+tmp/
 
 # Marimo
 marimo/_static/
