@@ -1,6 +1,6 @@
 import os
 import sys
-import tempfile # For creating temporary files
+import tempfile   # For creating temporary files
 import webbrowser # For opening HTML files in a browser
 
 from PyQt5.QtWidgets import (
