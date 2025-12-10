@@ -6,7 +6,7 @@ import csv
 from datetime import datetime
 
 from PyQt5.QtWidgets import (
-    QApplication, QWidget, QPushButton, QLabel, QFileDialog,
+    QApplication, QWidget, QPushButton, QLabel, QFileDialog, QDoubleSpinBox, QPushButton,
     QVBoxLayout, QHBoxLayout, QMessageBox, QLineEdit, QSlider, QCheckBox, QProgressBar
 )
 from PyQt5.QtCore import Qt
@@ -76,7 +76,12 @@ class AIAViewer(QWidget):
         self.prev_button = QPushButton('Previous')
         self.next_button = QPushButton('Next')
         self.save_button = QPushButton('Save')
-
+        
+        self.first_button = QPushButton('First Image')
+        self.last_button = QPushButton('Last Image')
+        self.first_button.clicked.connect(self.display_first_map)
+        self.last_button.clicked.connect(self.display_last_map)
+        
         self.load_button.clicked.connect(self.load_files)
         self.display_button.clicked.connect(self.display_first_map)
         self.upgrade_button.clicked.connect(self.upgrade_to_lv15)
@@ -146,6 +151,24 @@ class AIAViewer(QWidget):
         self.pfss_button.clicked.connect(self.calculate_pfss_model)
         self.pfss_button.setEnabled(False)
 
+        # --- Magnetic Field Line Opacity ---
+        self.opacity_label = QLabel('Field Line Opacity (0–1):')
+        self.opacity_input = QLineEdit()
+        self.opacity_input.setPlaceholderText('e.g. 0.4')
+        self.opacity_input.editingFinished.connect(self.update_fieldline_opacity)
+        
+        # # --- Camera Altitude ---
+        # self.alt_label = QLabel('Camera Altitude (deg):')
+        # self.alt_input = QLineEdit()
+        # self.alt_input.setPlaceholderText('e.g. 30')
+        # self.alt_input.editingFinished.connect(self.update_camera_angle)
+        
+        # # --- Camera Azimuth ---
+        # self.azim_label = QLabel('Camera Azimuth (deg):')
+        # self.azim_input = QLineEdit()
+        # self.azim_input.setPlaceholderText('e.g. 140')
+        # self.azim_input.editingFinished.connect(self.update_camera_angle)
+
         # Status label and progress bar
         self.label = QLabel('Ready.')
         self.progress = QProgressBar()
@@ -169,11 +192,12 @@ class AIAViewer(QWidget):
         # --- top buttons row ----------------------------------------------------
         btn_layout = QHBoxLayout()
         for b in [self.load_button, self.display_button, self.upgrade_button,
-                self.run_diff_button, self.prev_button, self.next_button, self.save_button]:
+                self.run_diff_button, self.prev_button, self.next_button,
+                  self.first_button, self.last_button, self.save_button]:
             btn_layout.addWidget(b)
-
+        
         left_layout.addLayout(btn_layout)
-
+        
         # --- big canvas in the center ------------------------------------------
         self.figure = Figure()
         self.canvas = FigureCanvas(self.figure)
@@ -211,6 +235,8 @@ class AIAViewer(QWidget):
         gong_pfss_layout.addWidget(self.select_gong_button)
         gong_pfss_layout.addWidget(self.gong_file_input)
         gong_pfss_layout.addWidget(self.pfss_button)
+        gong_pfss_layout.addWidget(self.opacity_label)
+        gong_pfss_layout.addWidget(self.opacity_input)
         right_layout.addLayout(gong_pfss_layout)
 
         # 3D controls
@@ -224,7 +250,47 @@ class AIAViewer(QWidget):
         _3d_layout.addWidget(QLabel('Radial Lines Horizontal:'))
         _3d_layout.addWidget(self.n_lon_radial_slider)
         _3d_layout.addWidget(self.show_field_lines_checkbox)
+        
+        # X
+        self.camx_label = QLabel('Camera eye X:')
+        self.camx_spin = QDoubleSpinBox()
+        self.camx_spin.setRange(-10.0, 10.0)
+        self.camx_spin.setSingleStep(0.1)
+        self.camx_spin.setValue(1.5)
+        right_layout.addWidget(self.camx_label)
+        right_layout.addWidget(self.camx_spin)
+        
+        # Y
+        self.camy_label = QLabel('Camera eye Y:')
+        self.camy_spin = QDoubleSpinBox()
+        self.camy_spin.setRange(-10.0, 10.0)
+        self.camy_spin.setSingleStep(0.1)
+        self.camy_spin.setValue(1.5)
+        right_layout.addWidget(self.camy_label)
+        right_layout.addWidget(self.camy_spin)
+        
+        # Z
+        self.camz_label = QLabel('Camera eye Z:')
+        self.camz_spin = QDoubleSpinBox()
+        self.camz_spin.setRange(-10.0, 10.0)
+        self.camz_spin.setSingleStep(0.1)
+        self.camz_spin.setValue(1.5)
+        right_layout.addWidget(self.camz_label)
+        right_layout.addWidget(self.camz_spin)
+        
+        # Refresh button
+        self.refresh_cam_btn = QPushButton('Refresh')
+        right_layout.addWidget(self.refresh_cam_btn)
+        self.refresh_cam_btn.clicked.connect(self.apply_camera_settings)
+        
         right_layout.addLayout(_3d_layout)
+
+
+
+
+
+
+    
 
     def select_gong_file(self):
         filepath, _ = QFileDialog.getOpenFileName(
@@ -293,6 +359,7 @@ class AIAViewer(QWidget):
             self.progress.setRange(0, 100)
             QApplication.processEvents()
 
+    
     def detect_data_level(self, file):
         name = os.path.basename(file).lower()
         if 'lev1.5' in name or 'lev15' in name:
@@ -311,37 +378,48 @@ class AIAViewer(QWidget):
                 print(f'Could not read header from {file}: {e}')
             return 'unknown'
 
+
     def load_files(self):
         files, _ = QFileDialog.getOpenFileNames(
             self, 'Select FITS files', '', 'FITS files (*.fits *.fts)')
         if not files:
             return
+        
+        self.raw_files = files
 
-        self.files = files
         n = len(files)
-        self.maps = []
         self.progress.setVisible(True)
         self.progress.setRange(0, n)
         self.progress.setValue(0)
         self.label.setText('Loading FITS files...')
         QApplication.processEvents()
 
+        # load maps once and keep the original filename with each map
+        maps_and_files = []
         for i, f in enumerate(files):
             try:
                 m = sunpy.map.Map(f)
-                self.maps.append(m)
+                maps_and_files.append((m, f))
             except Exception as e:
                 print(f'Error loading {f}: {e}')
             self.progress.setValue(i + 1)
             QApplication.processEvents()
 
+        # sort by the map observation time (chronological)
+        maps_and_files.sort(key=lambda mf: mf[0].date)
+
+        # unzip into two lists that are in the same chronological order
+        self.maps = [mf[0] for mf in maps_and_files]
+        self.files = [mf[1] for mf in maps_and_files]
         self.current_index = 0
         self.progress.setVisible(False)
         if self.maps:
             self.label.setText(f'{len(self.maps)} files loaded.')
+            # show the first (chronological) map explicitly
             self.plot_map(self.maps[0])
         else:
             self.label.setText('No maps loaded.')
+    
 
     def display_first_map(self):
         if not self.maps:
@@ -349,7 +427,14 @@ class AIAViewer(QWidget):
             return
         self.current_index = 0
         self.plot_map(self.maps[0])
-
+    
+    def display_last_map(self):
+        if not self.maps:
+            self.label.setText('No maps loaded.')
+            return
+        self.current_index = len(self.maps) - 1
+        self.plot_map(self.maps[self.current_index])
+    
     def show_prev_map(self):
         if self.maps:
             self.current_index = max(0, self.current_index - 1)
@@ -765,7 +850,16 @@ class AIAViewer(QWidget):
                 y_lines.extend([y_norm_sample[i], y_norm_sample[i] + ny_sample[i], None])
                 z_lines.extend([z_norm_sample[i], z_norm_sample[i] + nz_sample[i], None])
             fig.add_trace(go.Scatter3d(x=x_lines, y=y_lines, z=z_lines, mode='lines', line=dict(color='black', width=3), showlegend=False, name='Normal Vectors'))
-        fig.update_layout(scene=dict(xaxis=dict(range=[-2, 2], title='X (Solar Radii)'), yaxis=dict(range=[-2, 2], title='Y (Solar Radii)'), zaxis=dict(range=[-2, 2], title='Z (Solar Radii)'), aspectmode='cube', camera=dict(eye=dict(x=1.5, y=1.5, z=1.5))), width=1024, height=768, title='Interactive 3D Solar Shell Visualization', showlegend=True)
+        
+        fig.update_layout(scene=dict(xaxis=dict(range=[-2, 2], title='X (Solar Radii)'),
+                                     yaxis=dict(range=[-2, 2], title='Y (Solar Radii)'),
+                                     zaxis=dict(range=[-2, 2], title='Z (Solar Radii)'),
+                                     aspectmode='cube',
+                                     camera=dict(eye=dict(x=1.5, y=1.5, z=1.5))),
+                          width=1024,
+                          height=768,
+                          title='Interactive 3D Solar Shell Visualization',
+                          showlegend=True)
         return fig
 
     def show_3d_ellipsoid_plot(self):
