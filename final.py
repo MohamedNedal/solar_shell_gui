@@ -1,6 +1,8 @@
 import os
 import sys
 import tempfile
+print(tempfile.gettempdir())
+
 import webbrowser
 import csv
 from datetime import datetime
@@ -37,6 +39,7 @@ class AIAViewer(QWidget):
 
         self.ellipse_center = None
         self.ellipse_artist = None
+        self.theta_angles = np.array([])
 
         self.files = []
         self.maps = []
@@ -92,7 +95,10 @@ class AIAViewer(QWidget):
 
         self.ellipse_button = QPushButton('Ellipse')
         self.fit_button = QPushButton('Fit')
-
+        
+        self.export_params_button = QPushButton('Export Params')        
+        self.export_params_button.clicked.connect(self.export_fit_and_theta)
+        
         # Inputs for ellipse center
         self.x_input = QLineEdit()
         self.x_input.setPlaceholderText('X center [arcsec]')
@@ -115,6 +121,9 @@ class AIAViewer(QWidget):
         self.ellipse_button.clicked.connect(self.draw_ellipse_from_input)
         self.fit_button.clicked.connect(self.extract_ellipse_params)
 
+        self.export_3d_png_button = QPushButton('Export 3D PNG')
+        self.export_3d_png_button.clicked.connect(self.export_3d_png_silent)
+        
         # 3D Ellipsoid functionality
         self.show_3d_button = QPushButton('Show 3D Ellipsoid')
         self.show_3d_button.clicked.connect(self.show_3d_ellipsoid_plot)
@@ -150,25 +159,7 @@ class AIAViewer(QWidget):
         self.pfss_button = QPushButton('Calculate PFSS')
         self.pfss_button.clicked.connect(self.calculate_pfss_model)
         self.pfss_button.setEnabled(False)
-
-        # --- Magnetic Field Line Opacity ---
-        self.opacity_label = QLabel('Field Line Opacity (0–1):')
-        self.opacity_input = QLineEdit()
-        self.opacity_input.setPlaceholderText('e.g. 0.4')
-        self.opacity_input.editingFinished.connect(self.update_fieldline_opacity)
         
-        # # --- Camera Altitude ---
-        # self.alt_label = QLabel('Camera Altitude (deg):')
-        # self.alt_input = QLineEdit()
-        # self.alt_input.setPlaceholderText('e.g. 30')
-        # self.alt_input.editingFinished.connect(self.update_camera_angle)
-        
-        # # --- Camera Azimuth ---
-        # self.azim_label = QLabel('Camera Azimuth (deg):')
-        # self.azim_input = QLineEdit()
-        # self.azim_input.setPlaceholderText('e.g. 140')
-        # self.azim_input.editingFinished.connect(self.update_camera_angle)
-
         # Status label and progress bar
         self.label = QLabel('Ready.')
         self.progress = QProgressBar()
@@ -227,6 +218,7 @@ class AIAViewer(QWidget):
         ellipse_layout.addWidget(self.ellipse_button)
         ellipse_layout.addWidget(self.fit_button)
         ellipse_layout.addWidget(self.fit_result_label)  # shows fit values
+        ellipse_layout.addWidget(self.export_params_button)
         right_layout.addLayout(ellipse_layout)
 
         # GONG/PFSS controls
@@ -235,8 +227,6 @@ class AIAViewer(QWidget):
         gong_pfss_layout.addWidget(self.select_gong_button)
         gong_pfss_layout.addWidget(self.gong_file_input)
         gong_pfss_layout.addWidget(self.pfss_button)
-        gong_pfss_layout.addWidget(self.opacity_label)
-        gong_pfss_layout.addWidget(self.opacity_input)
         right_layout.addLayout(gong_pfss_layout)
 
         # 3D controls
@@ -250,39 +240,7 @@ class AIAViewer(QWidget):
         _3d_layout.addWidget(QLabel('Radial Lines Horizontal:'))
         _3d_layout.addWidget(self.n_lon_radial_slider)
         _3d_layout.addWidget(self.show_field_lines_checkbox)
-        
-        # X
-        self.camx_label = QLabel('Camera eye X:')
-        self.camx_spin = QDoubleSpinBox()
-        self.camx_spin.setRange(-10.0, 10.0)
-        self.camx_spin.setSingleStep(0.1)
-        self.camx_spin.setValue(1.5)
-        right_layout.addWidget(self.camx_label)
-        right_layout.addWidget(self.camx_spin)
-        
-        # Y
-        self.camy_label = QLabel('Camera eye Y:')
-        self.camy_spin = QDoubleSpinBox()
-        self.camy_spin.setRange(-10.0, 10.0)
-        self.camy_spin.setSingleStep(0.1)
-        self.camy_spin.setValue(1.5)
-        right_layout.addWidget(self.camy_label)
-        right_layout.addWidget(self.camy_spin)
-        
-        # Z
-        self.camz_label = QLabel('Camera eye Z:')
-        self.camz_spin = QDoubleSpinBox()
-        self.camz_spin.setRange(-10.0, 10.0)
-        self.camz_spin.setSingleStep(0.1)
-        self.camz_spin.setValue(1.5)
-        right_layout.addWidget(self.camz_label)
-        right_layout.addWidget(self.camz_spin)
-        
-        # Refresh button
-        self.refresh_cam_btn = QPushButton('Refresh')
-        right_layout.addWidget(self.refresh_cam_btn)
-        self.refresh_cam_btn.clicked.connect(self.apply_camera_settings)
-        
+        _3d_layout.addWidget(self.export_3d_png_button)
         right_layout.addLayout(_3d_layout)
 
 
@@ -305,6 +263,80 @@ class AIAViewer(QWidget):
             self.gong_file_input.setText('No GONG file selected')
             self.pfss_button.setEnabled(False)
             self.label.setText('No GONG file selected.')
+
+
+    def export_fit_and_theta(self):
+        try:
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            # out_csv = os.path.join(script_dir, 'ellipse_fit_and_theta.csv')
+            out_csv = os.path.join(script_dir, 'ellipse_fit.csv')
+            
+            x0 = float(self.x_input.text())
+            y0 = float(self.y_input.text())
+            a = float(self.a_slider.value())
+            b = float(self.b_slider.value())
+    
+            with open(out_csv, 'w', newline='') as fh:
+                writer = csv.writer(fh)
+                writer.writerow(['x0_arcsec', 'y0_arcsec', 'a_arcsec', 'b_arcsec'])
+                writer.writerow([x0, y0, a, b])
+                writer.writerow([])
+                writer.writerow(['theta_values'])
+                out_txt = os.path.join(script_dir, 'theta_angles.txt')
+                np.savetxt(out_txt, self.theta_angles)
+                # for t in self.theta_angles:
+                #     writer.writerow([t])
+    
+            # self.label.setText(f'Exported params + theta to {out_csv}')
+            self.label.setText(f'Exported fit params to {out_csv}')
+            self.label.setText(f'Exported theta to {out_txt}')
+        except Exception as e:
+            self.label.setText(f'Export error: {e}')
+    
+
+    def export_3d_png_silent(self):
+        if self.ellipse_center is None or not self.maps:
+            self.label.setText('Draw an ellipse and load a map first.')
+            return
+    
+        try:
+            x0, y0 = self.ellipse_center
+            a_radius = self.a_slider.value()
+            b_radius = self.b_slider.value()
+    
+            ellipse_params = {
+                'x0': x0,
+                'y0': y0,
+                'a': a_radius,
+                'b': b_radius
+            }
+    
+            current_map = self.maps[self.current_index]
+    
+            fig = self.create_3d_ellipsoid(
+                ellipse_params,
+                current_map,
+                self.show_shell_checkbox.isChecked(),
+                self.show_normals_checkbox.isChecked(),
+                self.show_radials_checkbox.isChecked(),
+                self.n_lat_radial_slider.value(),
+                self.n_lon_radial_slider.value(),
+                self.show_field_lines_checkbox.isChecked()
+            )
+    
+            # Export folder
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            out_png = os.path.join(script_dir, f'frame_{self.current_index+1:03d}.png') # zero-padded to 3 digits
+    
+            # Requires kaleido
+            pio.write_image(fig, out_png, width=1600, height=1200, scale=2)
+    
+            self.label.setText(f'3D PNG saved silently to {out_png}')
+        except Exception as e:
+            self.label.setText(f'PNG export failed: {e}')
+
+
+    
 
     def calculate_pfss_model(self):
         if self.gong_filepath is None:
@@ -799,6 +831,7 @@ class AIAViewer(QWidget):
                 if not show_field_lines or self.field_lines is None:
                     all_points_for_theta.append(r_vec * radial_length)
                     all_dirs_for_theta.append(r_vec)
+        
         if show_field_lines and self.field_lines:
             all_points_for_theta = []
             all_dirs_for_theta = []
@@ -809,16 +842,20 @@ class AIAViewer(QWidget):
                 x_field = coords.x / const.radius
                 y_field = coords.y / const.radius
                 z_field = coords.z / const.radius
-                fig.add_trace(go.Scatter3d(x=x_field, y=y_field, z=z_field, mode='lines', line=dict(color=color, width=2), showlegend=False))
+                fig.add_trace(go.Scatter3d(x=x_field, y=y_field, z=z_field, mode='lines', line=dict(color=color, width=2), showlegend=False, opacity=0.4))
+
+                # Calculate theta angle
                 for i in range(len(x_field)-1):
                     field_point = np.array([x_field[i].value, y_field[i].value, z_field[i].value])
                     all_points_for_theta.append(field_point)
                     field_vector = np.array([x_field[i+1].value - x_field[i].value, y_field[i+1].value - y_field[i].value, z_field[i+1].value - z_field[i].value])
                     field_vector = field_vector / np.linalg.norm(field_vector)
                     all_dirs_for_theta.append(field_vector)
+        
         all_points_for_theta = np.array(all_points_for_theta)
         all_dirs_for_theta = np.array(all_dirs_for_theta)
         theta_angles = np.full_like(x_outer, np.nan)
+        
         if len(all_points_for_theta) > 0 and len(x_outer) > 0:
             for i in range(len(x_outer)):
                 surf_pt = np.array([x_outer[i], y_outer[i], z_outer[i]])
@@ -829,11 +866,19 @@ class AIAViewer(QWidget):
                 cos_theta = np.dot(normal_vec, line_dir)
                 cos_theta = np.clip(cos_theta, -1.0, 1.0)
                 theta_angles[i] = np.degrees(np.arccos(np.abs(cos_theta)))
+        
         theta_surface = np.full_like(x_src, np.nan)
         theta_surface[mask] = theta_angles
+        self.theta_angles = theta_angles
+        print(self.theta_angles.shape)
+        
         if show_shell:
-            fig.add_trace(go.Scatter3d(x=[xshift], y=[yshift], z=[zshift], mode='markers', marker=dict(size=8, color='black'), showlegend=False, name='Shell Center'))
-            fig.add_trace(go.Surface(x=x_display, y=y_display, z=z_display, surfacecolor=theta_surface, colorscale='Viridis', cmin=0, cmax=90, opacity=1, showscale=True, colorbar=dict(title=dict(text='Theta Angle (degrees)', side='right'), len=0.6), name='Shell'))
+            fig.add_trace(go.Scatter3d(x=[xshift], y=[yshift], z=[zshift], mode='markers', marker=dict(size=8, color='black'),
+                                       showlegend=False, name='Shell Center'))
+            fig.add_trace(go.Surface(x=x_display, y=y_display, z=z_display, surfacecolor=theta_surface,
+                                     colorscale='Viridis', cmin=0, cmax=90, opacity=1, showscale=True,
+                                     colorbar=dict(title=dict(text='Theta Angle (degrees)', side='right'), len=0.6), name='Shell'))
+        
         if show_normals:
             step = max(1, len(x_outer) // 100)
             x_norm_sample = x_outer[::step]
@@ -855,7 +900,9 @@ class AIAViewer(QWidget):
                                      yaxis=dict(range=[-2, 2], title='Y (Solar Radii)'),
                                      zaxis=dict(range=[-2, 2], title='Z (Solar Radii)'),
                                      aspectmode='cube',
-                                     camera=dict(eye=dict(x=1.5, y=1.5, z=1.5))),
+                                     camera=dict(
+                                         eye=dict(x=0, y=1.5, z=0)
+                                     )),
                           width=1024,
                           height=768,
                           title='Interactive 3D Solar Shell Visualization',
