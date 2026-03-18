@@ -1,0 +1,11 @@
+PyQt5>=5.15
+matplotlib>=3.7
+sunpy>=5.0
+aiapy>=0.7
+astropy>=5.3
+scipy>=1.11
+numpy>=1.24
+pfsspy>=1.1
+plotly>=5.18
+kaleido>=0.2          # required only for silent PNG export (export_3d_png_silent)
+
