@@ -48,12 +48,16 @@ class AIAViewer(QWidget):
     - Computing PFSS magnetic field models from GONG magnetograms.
     - Rendering interactive 3-D CME shell visualisations.
     """
+    
 
     def __init__(self):
         """Initialise application state, temp directories, the CSV log, and the UI."""
         super().__init__()
         self.setWindowTitle('AIA FITS Viewer')
         self.setGeometry(100, 100, 1200, 1000)
+
+        self.theta_angles = np.array([])
+        self.theta_surface = np.array([])
 
         self.ellipse_center = None
         self.ellipse_artist = None
@@ -88,7 +92,6 @@ class AIAViewer(QWidget):
         """Build and wire up all PyQt5 widgets and layout managers."""
         # --- Buttons ---
         self.load_button = QPushButton('Load FITS')
-        self.display_button = QPushButton('Display')
         self.upgrade_button = QPushButton('Upgrade')
         self.run_diff_button = QPushButton('Run-Diff')
         self.prev_button = QPushButton('Previous')
@@ -96,6 +99,7 @@ class AIAViewer(QWidget):
         self.save_button = QPushButton('Save')
         self.first_button = QPushButton('First Image')
         self.last_button = QPushButton('Last Image')
+        self.J_plot_button = QPushButton('J Plot')
         self.ellipse_button = QPushButton('Ellipse')
         self.fit_button = QPushButton('Fit')
         self.export_params_button = QPushButton('Export Params')
@@ -164,13 +168,13 @@ class AIAViewer(QWidget):
 
         # --- Signal connections ---
         self.load_button.clicked.connect(self.load_files)
-        self.display_button.clicked.connect(self.display_first_map)
         self.upgrade_button.clicked.connect(self.upgrade_to_lv15)
         self.run_diff_button.clicked.connect(self.run_running_diff)
         self.prev_button.clicked.connect(self.show_prev_map)
         self.next_button.clicked.connect(self.show_next_map)
         self.first_button.clicked.connect(self.display_first_map)
         self.last_button.clicked.connect(self.display_last_map)
+        #self.J_plot_button.clicked.connect(self.J_plot)
         
         self.save_button.clicked.connect(self.save_current_map)
         self.ellipse_button.clicked.connect(self.draw_ellipse_from_input)
@@ -200,7 +204,7 @@ class AIAViewer(QWidget):
 
         btn_layout = QHBoxLayout()
         for btn in [
-            self.load_button, self.display_button, self.upgrade_button,
+            self.load_button, self.upgrade_button,
             self.run_diff_button, self.prev_button, self.next_button,
             self.first_button, self.last_button, self.frame_input, self.apply_button, self.save_button,
         ]:
@@ -628,26 +632,102 @@ class AIAViewer(QWidget):
             self.label.setText(f'Failed to save fit: {e}')
 
     def on_export_params(self):
-        """
-        Export the current ellipse fit to ``ellipse_fit.csv`` and theta angles
-        to ``theta_angles.txt``, both written to the script directory.
-        """
+        print("\n--- STARTING EXPORT ---")
+        
         try:
+            # 1. THE SAFETY CHECK: Stop immediately if the array doesn't exist yet!
+            if not hasattr(self, 'theta_surface') or self.theta_surface is None or np.size(self.theta_surface) == 0:
+                print("ERROR: theta_surface is empty!")
+                self.label.setText("Export Error: Please click 'Show 3D Ellipsoid' first to generate data!")
+                return  # This stops the export dead in its tracks
+
+            # 2. SETUP EXPORT PATHS
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            out_fit = os.path.join(script_dir, 'ellipse_fit.csv')
+            out_theta = os.path.join(script_dir, 'theta_surface.csv')
+            
             x0 = float(self.x_input.text())
             y0 = float(self.y_input.text())
             a = float(self.a_slider.value())
             b = float(self.b_slider.value())
-        except ValueError:
-            self.label.setText('Export error: invalid ellipse parameters.')
-            return
-        try:
-            script_dir = os.path.dirname(os.path.abspath(__file__))
-            out_csv, out_txt = export_fit_and_theta(
-                x0, y0, a, b, self.theta_angles, script_dir)
-            self.label.setText(f'Exported fit to {out_csv}')
-            self.label.setText(f'Exported theta to {out_txt}')
+
+            # 3. SAVE THE ARRAY (The formatting fixes the blank Excel issue)
+            # delimiter=',' puts commas between numbers
+            # fmt='%s' safely writes both standard floats and 'nan' (Not a Number) values
+            np.savetxt(out_theta, self.theta_surface, delimiter=',', fmt='%s')
+
+            self.label.setText(
+                f'Exported fit params to {out_fit}\n'
+                f'Exported theta to {out_theta}'
+            )
+            print(f"SUCCESS: Exported array of shape {np.shape(self.theta_surface)} to {out_theta}")
+
         except Exception as e:
+            # If anything crashes, this ensures the terminal screams about it
+            print(f"CRASH DURING EXPORT: {e}") 
             self.label.setText(f'Export error: {e}')
+
+    # def on_export_params(self):
+    #     """
+    #     Export the current ellipse fit to ``ellipse_fit.csv`` and theta angles
+    #     to ``theta_angles.txt``, both written to the script directory.
+    #     """
+    #     try:
+    #         script_dir = os.path.dirname(os.path.abspath(__file__))
+    #         # out_csv = os.path.join(script_dir, 'ellipse_fit_and_theta.csv')
+    #         out_fit = os.path.join(script_dir, 'ellipse_fit.csv')
+    #         out_theta = os.path.join(script_dir, 'theta_surface.csv')
+            
+    #         x0 = float(self.x_input.text())
+    #         y0 = float(self.y_input.text())
+    #         a = float(self.a_slider.value())
+    #         b = float(self.b_slider.value())
+
+    #         print("Export exists:", os.path.exists(out_fit))
+
+    #         self.label.setText(f'Exported fit + XYZ + theta to {out_fit}')
+                
+    #         np.savetxt(out_theta, self.theta_surface)
+
+    #         self.label.setText(
+    #             f'Exported fit params to {out_fit}\n'
+    #             f'Exported theta to {out_theta}'
+    #         )
+
+    #     except Exception as e:
+    #         self.label.setText(f'Export error: {e}')    
+
+    #     # --- Sanity Check ---
+    #         # This tells you exactly what the array looks like right before saving
+    #         print("Array shape:", np.shape(self.theta_surface))
+    #         print("Is array empty?", np.size(self.theta_surface) == 0)
+
+    #         self.label.setText(f'Exported fit + XYZ + theta to {out_fit}')
+                
+    #         # --- The Fix ---
+    #         # delimiter=',' forces actual CSV format
+    #         # fmt='%s' safely handles the mix of floats and NaNs
+    #         np.savetxt(out_theta, self.theta_surface, delimiter=',', fmt='%s')
+        #-----------------------------------------------------------------------------------------
+        
+        #Old version of the export data
+        # try:
+        #     x0 = float(self.x_input.text())
+        #     y0 = float(self.y_input.text())
+        #     a = float(self.a_slider.value())
+        #     b = float(self.b_slider.value())
+        # except ValueError:
+        #     self.label.setText('Export error: invalid ellipse parameters.')
+        #     return
+        # try:
+        #     script_dir = os.path.dirname(os.path.abspath(__file__))
+        #     out_csv, out_txt = export_fit_and_theta(
+        #         x0, y0, a, b, self.theta_angles, script_dir)
+        #     self.label.setText(f'Exported fit to {out_csv}')
+        #     self.label.setText(f'Exported theta to {out_txt}')
+        # except Exception as e:
+        #     self.label.setText(f'Export error: {e}')
+        #------------------------------------------------------------------------------------------
 
     # ------------------------------------------------------------------
     # GONG / PFSS
@@ -722,42 +802,94 @@ class AIAViewer(QWidget):
         x0, y0 = self.ellipse_center
         return {'x0': x0, 'y0': y0, 'a': self.a_slider.value(), 'b': self.b_slider.value()}
 
+    # def show_3d_ellipsoid_plot(self):
+    #     """
+    #     Build the 3-D ellipsoid visualisation and open it in the default web
+    #     browser as an interactive Plotly HTML page.
+    #     """
+    #     if self.ellipse_center is None or not self.maps:
+    #         QMessageBox.warning(
+    #             self, 'Warning', 'Please draw an ellipse and load a map first.')
+    #         return
+    #     if self.show_field_lines_checkbox.isChecked() and self.field_lines is None:
+    #         QMessageBox.warning(
+    #             self, 'Warning',
+    #             'Magnetic field data is not loaded. Please select a GONG file and '
+    #             'click "Calculate PFSS" first, or uncheck "Show Magnetic Field Lines".',
+    #         )
+    #         return
+    #     try:
+    #         fig, self.theta_angles = create_3d_ellipsoid(
+    #             self._build_ellipse_params(),
+    #             self.maps[self.current_index],
+    #             field_lines=self.field_lines,
+    #             show_shell=self.show_shell_checkbox.isChecked(),
+    #             show_normals=self.show_normals_checkbox.isChecked(),
+    #             show_radials=self.show_radials_checkbox.isChecked(),
+    #             n_lat_radial=self.n_lat_radial_slider.value(),
+    #             n_lon_radial=self.n_lon_radial_slider.value(),
+    #             show_field_lines=self.show_field_lines_checkbox.isChecked(),
+    #         )
+    #         with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.html') as f:
+    #             temp_filepath = f.name
+    #             pio.write_html(fig, file=f, auto_open=False, include_plotlyjs='cdn')
+    #         webbrowser.open(f'file://{temp_filepath}')
+    #         QMessageBox.information(
+    #             self, '3D Plot Displayed',
+    #             f'Opened in your default browser:\n{temp_filepath}',
+    #         )
+    #     except Exception as e:
+    #         QMessageBox.critical(self, 'Error', f'Failed to create 3D plot: {str(e)}')
+
     def show_3d_ellipsoid_plot(self):
-        """
-        Build the 3-D ellipsoid visualisation and open it in the default web
-        browser as an interactive Plotly HTML page.
-        """
         if self.ellipse_center is None or not self.maps:
-            QMessageBox.warning(
-                self, 'Warning', 'Please draw an ellipse and load a map first.')
+            QMessageBox.warning(self, 'Warning', 'Please draw an ellipse and load a map first.')
             return
+
         if self.show_field_lines_checkbox.isChecked() and self.field_lines is None:
-            QMessageBox.warning(
-                self, 'Warning',
-                'Magnetic field data is not loaded. Please select a GONG file and '
-                'click "Calculate PFSS" first, or uncheck "Show Magnetic Field Lines".',
-            )
+            QMessageBox.warning(self, 'Warning', 'Magnetic field data is not loaded. Please select a GONG file and click "PFSS" first, or uncheck "Show Magnetic Field Lines".')
             return
+
         try:
-            fig, self.theta_angles = create_3d_ellipsoid(
-                self._build_ellipse_params(),
-                self.maps[self.current_index],
-                field_lines=self.field_lines,
-                show_shell=self.show_shell_checkbox.isChecked(),
-                show_normals=self.show_normals_checkbox.isChecked(),
-                show_radials=self.show_radials_checkbox.isChecked(),
-                n_lat_radial=self.n_lat_radial_slider.value(),
-                n_lon_radial=self.n_lon_radial_slider.value(),
-                show_field_lines=self.show_field_lines_checkbox.isChecked(),
+            x0, y0 = self.ellipse_center
+            a_radius = self.a_slider.value()
+            b_radius = self.b_slider.value()
+
+            ellipse_params = {
+                'x0': x0,
+                'y0': y0,
+                'a': a_radius,
+                'b': b_radius
+            }
+
+            current_map = self.maps[self.current_index]
+            show_shell = self.show_shell_checkbox.isChecked()
+            show_normals = self.show_normals_checkbox.isChecked()
+            show_radials = self.show_radials_checkbox.isChecked()
+            n_lat_radial = self.n_lat_radial_slider.value()
+            n_lon_radial = self.n_lon_radial_slider.value()
+            show_field_lines = self.show_field_lines_checkbox.isChecked()
+
+            fig, self.theta_surface = create_3d_ellipsoid(
+                self,
+                ellipse_params,
+                current_map,
+                show_shell,
+                show_normals,
+                show_radials,
+                n_lat_radial,
+                n_lon_radial,
+                show_field_lines
             )
+
             with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.html') as f:
                 temp_filepath = f.name
                 pio.write_html(fig, file=f, auto_open=False, include_plotlyjs='cdn')
+
             webbrowser.open(f'file://{temp_filepath}')
-            QMessageBox.information(
-                self, '3D Plot Displayed',
-                f'Opened in your default browser:\n{temp_filepath}',
-            )
+            QMessageBox.information(self, '3D Plot Displayed',
+                                    f'The 3D ellipsoid plot has been opened in your default web browser at:\n{temp_filepath}\n\n'
+                                    'This is a workaround for the "Could not find QtWebEngineProcess" error.')
         except Exception as e:
             QMessageBox.critical(self, 'Error', f'Failed to create 3D plot: {str(e)}')
 
