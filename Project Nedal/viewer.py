@@ -667,72 +667,6 @@ class AIAViewer(QWidget):
             print(f"CRASH DURING EXPORT: {e}") 
             self.label.setText(f'Export error: {e}')
 
-    # def on_export_params(self):
-    #     """
-    #     Export the current ellipse fit to ``ellipse_fit.csv`` and theta angles
-    #     to ``theta_angles.txt``, both written to the script directory.
-    #     """
-    #     try:
-    #         script_dir = os.path.dirname(os.path.abspath(__file__))
-    #         # out_csv = os.path.join(script_dir, 'ellipse_fit_and_theta.csv')
-    #         out_fit = os.path.join(script_dir, 'ellipse_fit.csv')
-    #         out_theta = os.path.join(script_dir, 'theta_surface.csv')
-            
-    #         x0 = float(self.x_input.text())
-    #         y0 = float(self.y_input.text())
-    #         a = float(self.a_slider.value())
-    #         b = float(self.b_slider.value())
-
-    #         print("Export exists:", os.path.exists(out_fit))
-
-    #         self.label.setText(f'Exported fit + XYZ + theta to {out_fit}')
-                
-    #         np.savetxt(out_theta, self.theta_surface)
-
-    #         self.label.setText(
-    #             f'Exported fit params to {out_fit}\n'
-    #             f'Exported theta to {out_theta}'
-    #         )
-
-    #     except Exception as e:
-    #         self.label.setText(f'Export error: {e}')    
-
-    #     # --- Sanity Check ---
-    #         # This tells you exactly what the array looks like right before saving
-    #         print("Array shape:", np.shape(self.theta_surface))
-    #         print("Is array empty?", np.size(self.theta_surface) == 0)
-
-    #         self.label.setText(f'Exported fit + XYZ + theta to {out_fit}')
-                
-    #         # --- The Fix ---
-    #         # delimiter=',' forces actual CSV format
-    #         # fmt='%s' safely handles the mix of floats and NaNs
-    #         np.savetxt(out_theta, self.theta_surface, delimiter=',', fmt='%s')
-        #-----------------------------------------------------------------------------------------
-        
-        #Old version of the export data
-        # try:
-        #     x0 = float(self.x_input.text())
-        #     y0 = float(self.y_input.text())
-        #     a = float(self.a_slider.value())
-        #     b = float(self.b_slider.value())
-        # except ValueError:
-        #     self.label.setText('Export error: invalid ellipse parameters.')
-        #     return
-        # try:
-        #     script_dir = os.path.dirname(os.path.abspath(__file__))
-        #     out_csv, out_txt = export_fit_and_theta(
-        #         x0, y0, a, b, self.theta_angles, script_dir)
-        #     self.label.setText(f'Exported fit to {out_csv}')
-        #     self.label.setText(f'Exported theta to {out_txt}')
-        # except Exception as e:
-        #     self.label.setText(f'Export error: {e}')
-        #------------------------------------------------------------------------------------------
-
-    # ------------------------------------------------------------------
-    # GONG / PFSS
-    # ------------------------------------------------------------------
-
     def select_gong_file(self):
         """
         Open a file dialog to choose a GONG magnetogram FITS file and
@@ -802,45 +736,6 @@ class AIAViewer(QWidget):
         x0, y0 = self.ellipse_center
         return {'x0': x0, 'y0': y0, 'a': self.a_slider.value(), 'b': self.b_slider.value()}
 
-    # def show_3d_ellipsoid_plot(self):
-    #     """
-    #     Build the 3-D ellipsoid visualisation and open it in the default web
-    #     browser as an interactive Plotly HTML page.
-    #     """
-    #     if self.ellipse_center is None or not self.maps:
-    #         QMessageBox.warning(
-    #             self, 'Warning', 'Please draw an ellipse and load a map first.')
-    #         return
-    #     if self.show_field_lines_checkbox.isChecked() and self.field_lines is None:
-    #         QMessageBox.warning(
-    #             self, 'Warning',
-    #             'Magnetic field data is not loaded. Please select a GONG file and '
-    #             'click "Calculate PFSS" first, or uncheck "Show Magnetic Field Lines".',
-    #         )
-    #         return
-    #     try:
-    #         fig, self.theta_angles = create_3d_ellipsoid(
-    #             self._build_ellipse_params(),
-    #             self.maps[self.current_index],
-    #             field_lines=self.field_lines,
-    #             show_shell=self.show_shell_checkbox.isChecked(),
-    #             show_normals=self.show_normals_checkbox.isChecked(),
-    #             show_radials=self.show_radials_checkbox.isChecked(),
-    #             n_lat_radial=self.n_lat_radial_slider.value(),
-    #             n_lon_radial=self.n_lon_radial_slider.value(),
-    #             show_field_lines=self.show_field_lines_checkbox.isChecked(),
-    #         )
-    #         with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.html') as f:
-    #             temp_filepath = f.name
-    #             pio.write_html(fig, file=f, auto_open=False, include_plotlyjs='cdn')
-    #         webbrowser.open(f'file://{temp_filepath}')
-    #         QMessageBox.information(
-    #             self, '3D Plot Displayed',
-    #             f'Opened in your default browser:\n{temp_filepath}',
-    #         )
-    #     except Exception as e:
-    #         QMessageBox.critical(self, 'Error', f'Failed to create 3D plot: {str(e)}')
-
     def show_3d_ellipsoid_plot(self):
         if self.ellipse_center is None or not self.maps:
             QMessageBox.warning(self, 'Warning', 'Please draw an ellipse and load a map first.')
@@ -870,7 +765,8 @@ class AIAViewer(QWidget):
             n_lon_radial = self.n_lon_radial_slider.value()
             show_field_lines = self.show_field_lines_checkbox.isChecked()
 
-            fig, self.theta_surface = create_3d_ellipsoid(
+            # --- UPDATED UNPACKING: Catch the new save_dir variable ---
+            fig, self.theta_surface, save_dir = create_3d_ellipsoid(
                 self,
                 ellipse_params,
                 current_map,
@@ -882,13 +778,19 @@ class AIAViewer(QWidget):
                 show_field_lines
             )
 
-            with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.html') as f:
-                temp_filepath = f.name
-                pio.write_html(fig, file=f, auto_open=False, include_plotlyjs='cdn')
+            # --- NEW FILE SAVING LOGIC ---
+            # Create a path for the HTML file inside your newly created datetime folder
+            html_filepath = os.path.join(save_dir, '3d_plot.html')
+            
+            # Save the plotly figure directly to that file
+            pio.write_html(fig, file=html_filepath, auto_open=False, include_plotlyjs='cdn')
 
-            webbrowser.open(f'file://{temp_filepath}')
+            # Get the absolute path so the web browser can open it properly
+            abs_path = os.path.abspath(html_filepath)
+            webbrowser.open(f'file://{abs_path}')
+            
             QMessageBox.information(self, '3D Plot Displayed',
-                                    f'The 3D ellipsoid plot has been opened in your default web browser at:\n{temp_filepath}\n\n'
+                                    f'The data arrays and 3D plot have been saved to:\n{abs_path}\n\n'
                                     'This is a workaround for the "Could not find QtWebEngineProcess" error.')
         except Exception as e:
             QMessageBox.critical(self, 'Error', f'Failed to create 3D plot: {str(e)}')
