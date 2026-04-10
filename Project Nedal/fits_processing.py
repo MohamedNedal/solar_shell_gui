@@ -105,6 +105,7 @@ def upgrade_maps_to_lv15(files, channel, temp_dir, progress_callback=None):
                     # m = update_pointing(m, pointing_table=None)
                     m = register(m)
                     m = m / m.exposure_time
+                    m.plot_settings['norm'] = ImageNormalize(vmin=0, vmax=2e3, stretch=SqrtStretch())
                     m.save(full_path, filetype='auto')
                     processed_maps.append(m)
                 else:
@@ -120,14 +121,11 @@ def upgrade_maps_to_lv15(files, channel, temp_dir, progress_callback=None):
             
         if progress_callback:
             progress_callback(i + 1, total)
-            
-    # --- NEW: Apply plotting normalization to all loaded maps ---
-    for m in processed_maps:
-        m.plot_settings['norm'] = ImageNormalize(vmin=0, vmax=2e3, stretch=SqrtStretch())
         
     return processed_maps
 
-def create_running_diff_maps(processed_maps, progress_callback=None):
+
+def create_running_diff_maps(processed_maps, progress_callback=None, full_res=False):
     """
     Compute running-difference maps from a sequence of processed AIA maps.
 
@@ -152,23 +150,89 @@ def create_running_diff_maps(processed_maps, progress_callback=None):
     ValueError
         If fewer than 6 maps are supplied.
     """
-    if len(processed_maps) < 6:
-        raise ValueError('Need at least 6 images for running difference.')
-
     running_diff_maps = []
-    n = len(processed_maps) - 5
-    for idx, i in enumerate(range(5, len(processed_maps))):
-        try:
-            m0 = processed_maps[i - 5]
-            m1 = processed_maps[i]
-            diff = m1.quantity - m0.quantity
-            smoothed = ndimage.gaussian_filter(diff, sigma=[3, 3])
-            diff_map = sunpy.map.Map(smoothed, m1.meta)
-            diff_map.plot_settings['norm'] = colors.Normalize(vmin=-50, vmax=50)
-            running_diff_maps.append(diff_map)
-        except Exception as e:
-            print(f'Error creating diff map {i}: {e}')
-        if progress_callback:
-            progress_callback(idx + 1, n)
+    print('Type of processed_maps:', type(processed_maps))
+
+    if full_res:
+        if len(processed_maps) < 6:
+            raise ValueError('Need at least 6 images for running difference.')
+
+        n = len(processed_maps) - 5
+        for idx, i in enumerate(range(5, len(processed_maps))):
+            try:
+                m0 = processed_maps[i - 5]
+                m1 = processed_maps[i]
+                diff = m1.quantity - m0.quantity
+                smoothed = ndimage.gaussian_filter(diff, sigma=[3, 3])
+                diff_map = sunpy.map.Map(smoothed, m1.meta)
+                diff_map.plot_settings['norm'] = colors.Normalize(vmin=-50, vmax=50)
+                running_diff_maps.append(diff_map)
+            except Exception as e:
+                print(f'Error creating diff map {i}: {e}')
+            if progress_callback:
+                progress_callback(idx + 1, n)
+    else:
+        n = len(processed_maps)
+        for idx, i in enumerate(range(1, len(processed_maps))):
+            try:
+                m0 = processed_maps[i - 1]
+                m1 = processed_maps[i]
+                diff = m1.quantity - m0.quantity
+                smoothed = ndimage.gaussian_filter(diff, sigma=[3, 3])
+                diff_map = sunpy.map.Map(smoothed, m1.meta)
+                diff_map.plot_settings['norm'] = colors.Normalize(vmin=-50, vmax=50)
+                running_diff_maps.append(diff_map)
+            except Exception as e:
+                print(f'Error creating diff map {i}: {e}')
+            if progress_callback:
+                progress_callback(idx + 1, n)
+
     return running_diff_maps
+
+
+
+# def create_running_diff_maps(processed_maps, progress_callback=None):
+#     """
+#     Compute running-difference maps from a sequence of processed AIA maps.
+
+#     Each difference is taken between frame ``i`` and frame ``i - 5``, then
+#     smoothed with a Gaussian filter (sigma=3).  The resulting maps use a
+#     symmetric ±50 DN/s colour normalisation.
+
+#     Parameters
+#     ----------
+#     processed_maps : list of sunpy.map.GenericMap
+#         At least 6 level-1.5 maps in chronological order.
+#     progress_callback : callable, optional
+#         Called as ``progress_callback(current, total)`` after each diff map.
+
+#     Returns
+#     -------
+#     list of sunpy.map.GenericMap
+#         Running-difference maps ready for display.
+
+#     Raises
+#     ------
+#     ValueError
+#         If fewer than 6 maps are supplied.
+#     """    
+#     if len(processed_maps) < 6:
+#         raise ValueError('Need at least 6 images for running difference.')
+
+#     running_diff_maps = []
+#     n = len(processed_maps) - 5
+#     for idx, i in enumerate(range(5, len(processed_maps))):
+#         try:
+#             m0 = processed_maps[i - 5]
+#             m1 = processed_maps[i]
+#             diff = m1.quantity - m0.quantity
+#             smoothed = ndimage.gaussian_filter(diff, sigma=[3, 3])
+#             diff_map = sunpy.map.Map(smoothed, m1.meta)
+#             diff_map.plot_settings['norm'] = colors.Normalize(vmin=-50, vmax=50)
+#             running_diff_maps.append(diff_map)
+#         except Exception as e:
+#             print(f'Error creating diff map {i}: {e}')
+#         if progress_callback:
+#             progress_callback(idx + 1, n)
+#     return running_diff_maps
 

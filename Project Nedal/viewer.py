@@ -147,6 +147,8 @@ class AIAViewer(QWidget):
         self.n_lon_radial_slider.setToolTip('Number of radial lines (horizontal)')
 
         # --- Checkboxes ---
+        self.full_res_checkbox = QCheckBox('Full-Res Diff (frame i-5)')
+        self.full_res_checkbox.setChecked(False)  # default: simple consecutive diff
         self.show_shell_checkbox = QCheckBox('Show Ellipsoid Shell')
         self.show_shell_checkbox.setChecked(True)
         self.show_normals_checkbox = QCheckBox('Show Normals')
@@ -168,7 +170,7 @@ class AIAViewer(QWidget):
         # --- Signal connections ---
         self.load_button.clicked.connect(self.load_files)
         self.upgrade_button.clicked.connect(self.upgrade_to_lv15)
-        self.run_diff_button.clicked.connect(create_running_diff_maps)
+        self.run_diff_button.clicked.connect(self._on_run_diff)
         self.prev_button.clicked.connect(self.show_prev_map)
         self.next_button.clicked.connect(self.show_next_map)
         self.first_button.clicked.connect(self.display_first_map)
@@ -207,6 +209,7 @@ class AIAViewer(QWidget):
             self.first_button, self.last_button, self.frame_input, self.apply_button, self.save_button,
         ]:
             btn_layout.addWidget(btn)
+        btn_layout.addWidget(self.full_res_checkbox)
         left_layout.addLayout(btn_layout)
 
         self.figure = Figure()
@@ -449,6 +452,54 @@ class AIAViewer(QWidget):
         """
         if not self.processed_maps and self.maps:
             self.processed_maps = self.maps.copy()
+    
+
+    def _on_run_diff(self):
+        """
+        Handle the Run-Diff button click.
+        
+        Reads the full_res checkbox to decide which differencing mode to use,
+        then calls fits_processing.create_running_diff_maps with the correct
+        arguments. Falls back to self.maps if the upgrade step was skipped.
+        """
+        # Ensure processed_maps is populated even if user skipped the upgrade step
+        self.set_processed_maps_from_loaded()
+
+        full_res = self.full_res_checkbox.isChecked()
+
+        # The full_res mode requires at least 6 frames; check early so we can
+        # give the user a friendly message rather than a raw ValueError.
+        if full_res and len(self.processed_maps) < 6:
+            QMessageBox.warning(self, 'Warning',
+                                'Full-Res mode needs at least 6 images.')
+            return
+
+        n = len(self.processed_maps) - (5 if full_res else 0)
+        self.progress.setVisible(True)
+        self.progress.setRange(0, n)
+        self.progress.setValue(0)
+        self.label.setText('Creating running-difference maps...')
+        QApplication.processEvents()
+
+        def _cb(current, total):
+            self.progress.setValue(current)
+            QApplication.processEvents()
+
+        self.running_diff_maps = create_running_diff_maps(
+            self.processed_maps,
+            progress_callback=_cb,
+            full_res=full_res,      # pass the user's choice through
+        )
+
+        self.maps = self.running_diff_maps
+        self.current_index = 0
+        self.progress.setVisible(False)
+
+        if self.maps:
+            self.plot_map(self.maps[0])
+
+        self.label.setText(f'Created {len(self.running_diff_maps)} running-difference maps.')
+
 
     def update_display(self):
         self.figure.clear()
