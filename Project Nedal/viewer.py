@@ -168,7 +168,7 @@ class AIAViewer(QWidget):
         # --- Signal connections ---
         self.load_button.clicked.connect(self.load_files)
         self.upgrade_button.clicked.connect(self.upgrade_to_lv15)
-        self.run_diff_button.clicked.connect(create_running_diff_maps)
+        self.run_diff_button.clicked.connect(self.on_run_diff_clicked)
         self.prev_button.clicked.connect(self.show_prev_map)
         self.next_button.clicked.connect(self.show_next_map)
         self.first_button.clicked.connect(self.display_first_map)
@@ -405,6 +405,31 @@ class AIAViewer(QWidget):
     # ------------------------------------------------------------------
     # FITS processing
     # ------------------------------------------------------------------
+
+    #New Middle Man-----------------------------------------------------
+
+    def on_run_diff_clicked(self):
+    # 1. First, make sure you actually have processed maps ready to go!
+    # (Using the fallback method you showed me earlier)
+        self.set_processed_maps_from_loaded()
+        
+        if not self.processed_maps:
+            print("Warning: No maps loaded to process.")
+            return
+
+        print("Sending maps to the difference function...")
+        
+        # 2. Call your function and explicitly pass the correct list of maps
+        self.diff_results = create_running_diff_maps(self.processed_maps, full_res=False)
+        
+        # 3. Update the GUI to show it worked
+        print(f"Success! Created {len(self.diff_results)} running difference maps.")
+        
+        # Optional: Plot the first difference map if you want
+        if self.diff_results:
+            self.plot_map(self.diff_results[0])
+
+    #------------------------------------------------------
 
     def upgrade_to_lv15(self):
         """
