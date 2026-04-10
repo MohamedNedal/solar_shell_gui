@@ -15,7 +15,6 @@ import sys
 from PyQt5.QtWidgets import QApplication
 from viewer import AIAViewer
 
-
 def main():
     """Initialise the Qt application, create the main window, and start the event loop."""
     app = QApplication(sys.argv)

@@ -77,3 +77,6 @@ def calculate_pfss_model(gong_filepath, progress_callback=None):
     field_lines = tracer.trace(seeds, pfss_out)
 
     return gong_map, pfss_out, field_lines
+
+#J-Plot Code as Viewer.py has too much code already
+#def J_plot(viewer):

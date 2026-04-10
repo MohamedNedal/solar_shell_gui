@@ -102,7 +102,6 @@ class AIAViewer(QWidget):
         self.J_plot_button = QPushButton('J Plot')
         self.ellipse_button = QPushButton('Ellipse')
         self.fit_button = QPushButton('Fit')
-        self.export_params_button = QPushButton('Export Params')
         self.show_3d_button = QPushButton('Show 3D Ellipsoid')
         self.export_3d_png_button = QPushButton('Export 3D PNG')
         self.select_gong_button = QPushButton('Select GONG File')
@@ -169,7 +168,7 @@ class AIAViewer(QWidget):
         # --- Signal connections ---
         self.load_button.clicked.connect(self.load_files)
         self.upgrade_button.clicked.connect(self.upgrade_to_lv15)
-        self.run_diff_button.clicked.connect(self.run_running_diff)
+        self.run_diff_button.clicked.connect(create_running_diff_maps)
         self.prev_button.clicked.connect(self.show_prev_map)
         self.next_button.clicked.connect(self.show_next_map)
         self.first_button.clicked.connect(self.display_first_map)
@@ -179,7 +178,6 @@ class AIAViewer(QWidget):
         self.save_button.clicked.connect(self.save_current_map)
         self.ellipse_button.clicked.connect(self.draw_ellipse_from_input)
         self.fit_button.clicked.connect(self.on_fit_button)
-        self.export_params_button.clicked.connect(self.on_export_params)
         self.show_3d_button.clicked.connect(self.show_3d_ellipsoid_plot)
         self.export_3d_png_button.clicked.connect(self.export_3d_png_silent)
         self.select_gong_button.clicked.connect(self.select_gong_file)
@@ -251,7 +249,6 @@ class AIAViewer(QWidget):
         ellipse_layout.addWidget(self.ellipse_button)
         ellipse_layout.addWidget(self.fit_button)
         ellipse_layout.addWidget(self.fit_result_label)
-        ellipse_layout.addWidget(self.export_params_button)
         right_layout.addLayout(ellipse_layout)
 
         # Right panel: GONG / PFSS
@@ -485,47 +482,6 @@ class AIAViewer(QWidget):
         m, filename = self.maps_and_files[self.current_index]
         self.plot_map(self.maps[self.current_index])
 
-    def run_running_diff(self):
-        self.set_processed_maps_from_loaded()
-
-        if len(self.processed_maps) < 6:
-            QMessageBox.warning(self, 'Warning',
-                                'Need at least 6 images for running difference.')
-            return
-
-        self.running_diff_maps = []
-        n = len(self.processed_maps) - 5
-        self.progress.setVisible(True)
-        self.progress.setRange(0, n)
-        self.progress.setValue(0)
-        self.label.setText('Creating running-difference maps...')
-        QApplication.processEvents()
-
-        vmin_text = self.vmin_input.text()
-        vmax_text = self.vmax_input.text()
-        v1 = float(vmin_text) if vmin_text else -50.0
-        v2 = float(vmax_text) if vmax_text else 50.0
-        
-        for idx, i in enumerate(range(5, len(self.processed_maps))):
-            try:
-                m0 = self.processed_maps[i-5]
-                m1 = self.processed_maps[i]
-                diff = m1.quantity - m0.quantity
-                smoothed = ndimage.gaussian_filter(diff, sigma=[3, 3])
-                diff_map = sunpy.map.Map(smoothed, m1.meta)
-                diff_map.plot_settings['norm'] = colors.Normalize(vmin=v1, vmax=v2)
-                self.running_diff_maps.append(diff_map)
-            except Exception as e:
-                print(f'Error creating diff map {i}: {e}')
-            self.progress.setValue(idx + 1)
-            QApplication.processEvents()
-
-        self.maps = self.running_diff_maps
-        self.current_index = 0
-        self.progress.setVisible(False)
-        if self.maps:
-            self.plot_map(self.maps[0])
-        self.label.setText(f'Created {len(self.running_diff_maps)} running difference maps.')
 
     # ------------------------------------------------------------------
     # Ellipse tools
@@ -630,42 +586,6 @@ class AIAViewer(QWidget):
             append_fit_to_csv(self.fit_results_csv, params, name)
         except Exception as e:
             self.label.setText(f'Failed to save fit: {e}')
-
-    def on_export_params(self):
-        print("\n--- STARTING EXPORT ---")
-        
-        try:
-            # 1. THE SAFETY CHECK: Stop immediately if the array doesn't exist yet!
-            if not hasattr(self, 'theta_surface') or self.theta_surface is None or np.size(self.theta_surface) == 0:
-                print("ERROR: theta_surface is empty!")
-                self.label.setText("Export Error: Please click 'Show 3D Ellipsoid' first to generate data!")
-                return  # This stops the export dead in its tracks
-
-            # 2. SETUP EXPORT PATHS
-            script_dir = os.path.dirname(os.path.abspath(__file__))
-            out_fit = os.path.join(script_dir, 'ellipse_fit.csv')
-            out_theta = os.path.join(script_dir, 'theta_surface.csv')
-            
-            x0 = float(self.x_input.text())
-            y0 = float(self.y_input.text())
-            a = float(self.a_slider.value())
-            b = float(self.b_slider.value())
-
-            # 3. SAVE THE ARRAY (The formatting fixes the blank Excel issue)
-            # delimiter=',' puts commas between numbers
-            # fmt='%s' safely writes both standard floats and 'nan' (Not a Number) values
-            np.savetxt(out_theta, self.theta_surface, delimiter=',', fmt='%s')
-
-            self.label.setText(
-                f'Exported fit params to {out_fit}\n'
-                f'Exported theta to {out_theta}'
-            )
-            print(f"SUCCESS: Exported array of shape {np.shape(self.theta_surface)} to {out_theta}")
-
-        except Exception as e:
-            # If anything crashes, this ensures the terminal screams about it
-            print(f"CRASH DURING EXPORT: {e}") 
-            self.label.setText(f'Export error: {e}')
 
     def select_gong_file(self):
         """
