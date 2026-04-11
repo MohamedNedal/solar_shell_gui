@@ -9,7 +9,7 @@ import os
 import sunpy.map
 import numpy as np
 from astropy.visualization import ImageNormalize, SqrtStretch
-from aiapy.calibrate import register, update_pointing
+from aiapy.calibrate import register, update_pointing 
 from scipy import ndimage
 from matplotlib import colors
 import astropy.units as u
@@ -102,7 +102,7 @@ def upgrade_maps_to_lv15(files, channel, temp_dir, progress_callback=None):
                 
                 if not os.path.exists(full_path):
                     m = sunpy.map.Map(file)
-                    # m = update_pointing(m, pointing_table=None)
+                    m = update_pointing(m, pointing_table=None)
                     m = register(m)
                     m = m / m.exposure_time
                     m.plot_settings['norm'] = ImageNormalize(vmin=0, vmax=2e3, stretch=SqrtStretch())
