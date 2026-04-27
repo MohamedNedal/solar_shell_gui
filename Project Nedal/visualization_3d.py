@@ -11,7 +11,6 @@ from astropy.coordinates import SkyCoord
 from sunpy.sun import constants as const
 import astropy.units as u
 import csv
-
 import os
 
 def create_3d_ellipsoid(self, ellipse_params, sunpy_map, show_shell=True, show_normals=False, show_radials=False, n_lat_radial=10, n_lon_radial=30, show_field_lines=False):

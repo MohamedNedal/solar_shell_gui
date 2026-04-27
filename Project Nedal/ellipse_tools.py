@@ -8,7 +8,6 @@ and CSV/text file export.  No Qt dependency.
 import os
 import csv
 from datetime import datetime
-
 import numpy as np
 import astropy.units as u
 
